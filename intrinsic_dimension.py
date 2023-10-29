@@ -40,15 +40,10 @@ def pool_tensor(x, attention_mask):
     return pooled_rep.cpu()
 
 def last_token_rep(x, attention_mask, padding='right'):
-    # print(x)
-    # print(attention_mask)
     seq_len = attention_mask.sum(dim=1)
-    # print('len of sequences', seq_len)
     indices = (seq_len - 1)
-    # print(x.size(0))
-    # print(indices)
+
     last_token_rep = x[torch.arange(x.size(0)), indices] if padding=='right' else x[torch.arange(x.size(0)), -1]
-    # print(last_token_rep)
     return last_token_rep.cpu()
 
 def random_token_rep(x, attention_mask):
@@ -70,8 +65,6 @@ def get_representations(model, encodings, padding, pooling_methods=['last_token'
         for batch in tqdm(encodings):
 
             try:
-                # print('input ids: ', batch['input_ids'][0])
-                # print('shape: ', batch['input_ids'].shape)
                 output = model(batch['input_ids'], attention_mask=batch['attention_mask'], output_hidden_states=True)['hidden_states']
             except Exception as e:
                 print(e)
@@ -84,11 +77,6 @@ def get_representations(model, encodings, padding, pooling_methods=['last_token'
                 pooled_output = tuple([pooling_fn(x, batch['attention_mask'], padding=padding) for x in output]) 
                 # len-k tuple (each elt is a layer). Each layer is batchsize x embed dim
                 
-                # print(81)
-                # print(len(pooled_output))
-                # print(pooled_output[0])
-                # print('The token: ', batch['input_ids'][0][batch['attention_mask'].sum(dim=1) - 1])
-                # print('The next token: ', batch['input_ids'][0][batch['attention_mask'].sum(dim=1)]) # FINE
                 outputs[pooling_method].append(pooled_output)
 
     # Concatenate the batches together
@@ -103,7 +91,6 @@ def get_representations(model, encodings, padding, pooling_methods=['last_token'
         outputs[pooling_method] = representations
         print('Layer 1 reps shape: ')
         print(representations[1].shape)
-        # input()
     return outputs
 
 ################## ID METHOD #######################
@@ -112,13 +99,10 @@ METHODS = {
     'TwoNN': skdim.id.TwoNN(),
     'FisherS': skdim.id.FisherS(),
     'CorrInt': skdim.id.CorrInt(),
-    # 'DANCo': skdim.id.DANCo(),
-    # 'KNN': skdim.id.KNN(),
     'MLE': skdim.id.MLE(),
     'TLE': skdim.id.TLE(),
     'ESS': skdim.id.ESS(),
     'MADA': skdim.id.MADA(),
-    # 'MiND_ML': skdim.id.MiND_ML(),
     'MOM': skdim.id.MOM()
 }
 #####################################################
@@ -138,15 +122,7 @@ def compute_layer_ids(representations, method):
             print('Problem with Layer ', i)
             print('Number of unique representations')
             print(deduped.shape[0])
-
-    #         for i in range(deduped.shape[0]):
-    #             # find where dup_indices is equal to i
-    #             mask = torch.eq(torch.Tensor([i]), dup_indices).numpy() # len = N
-    #             same_representations = [data[i] for i, elt in enumerate(mask) if elt]
-    #             if len(same_representations) > 1:
-    #                 print('Same representations')
-    #                 [print(elt) for elt in same_representations]
-    #                 print('\n')
+            
             ids[method].append(None)
     # ids_df = pd.DataFrame(ids)
     # ids_df.index = ids_df.index / len(ids_df)
@@ -217,8 +193,7 @@ if __name__=='__main__':
     ) for pooling in args.pooling
     ]
     paths_exist = [os.path.exists(cached_reps_path) for cached_reps_path in cached_reps_paths]
-    print(cached_reps_paths)
-    print(paths_exist)
+
     if not all(paths_exist):
         # Get model, tokenizer
         model = AutoModelForCausalLM.from_pretrained(
@@ -238,12 +213,8 @@ if __name__=='__main__':
             use_fast=False,
             token=HF_TOKEN
         )
-        if 'Llama-2' in args.model_name:
-            tokenizer.pad_token = tokenizer.eos_token
-            tokenizer.padding_side = "right" # Fix weird overflow issue with fp16 training
- 
-        model.config.n_positions = model.config.max_position_embeddings if 'bloom' not in args.model_name else 2048 # llama and opt have this param, bloom doesn't
-
+        
+        model.config.n_positions = model.config.max_position_embeddings
         N, data = process_dataset(args)
         print('N: ', N)
         print(data[0])
@@ -270,9 +241,7 @@ if __name__=='__main__':
         representations = torch.load(cached_reps_paths[0])
 
     print('Len representations: ', len(representations))
-    # input()
     print(representations[0].shape)
-    # input()
 
     # Get ID dfs for method in METHOD
     id_json = compute_layer_ids(representations, args.method_name)
